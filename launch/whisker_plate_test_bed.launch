@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+	<param name="robot_description" command="$(find xacro)/xacro '$(find robominer_simulation)/models/robominer/whisker_sensor.urdf'"/>
+	<arg name="robot" default="machines"/>
+	<arg name="robot_name" default="robominer"/>
+	<arg name="debug" default="false"/>
+	<arg name="gui" default="true"/>
+	<arg name="headless" default="false"/>
+	<arg name="pause" default="true"/> 
+	<arg name="z" default="0.0" />
+ 
+    <!-- Load joint controller configurations from YAML file to parameter server -->
+	<rosparam file="$(find robominer_simulation)/config/whisker_control.yaml" command="load"/> 
+
+	<include file="$(find gazebo_ros)/launch/empty_world.launch">
+	<!-- set world -->	
+		<arg name="world_name" value="$(find robominer_simulation)/worlds/brick_up.world"/>
+		<!-- <arg name="world_name" value="$(find robominer_simulation)/worlds/empty_world.world"/> -->
+		<arg name="debug" value="$(arg debug)" />
+		<arg name="gui" value="$(arg gui)" />
+		<arg name="paused" value="$(arg pause)"/>
+		<arg name="use_sim_time" value="true"/>
+		<arg name="verbose" value="true"/>
+		<arg name="headless" value="$(arg headless)"/>
+		<env name="GAZEBO_MODEL_PATH" value="$(find robominer_simulation)/models:$(optenv GAZEBO_MODEL_PATH)"/>
+	</include>
+
+    <node name="whiskers_urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
+        args="-urdf -z $(arg z) -model $(arg robot_name) -param robot_description"/>
+
+	<!-- convert joint states to TF transforms for rviz, etc -->
+	<node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
+		<remap from="/joint_states" to="/robominer/joint_states" />
+	</node>
+
+	<!-- load the controllers -->
+  	<node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="true"
+		output="screen" ns="/robominer"
+		args="joint_state_controller"/>  
+
+  	<node type="rviz" name="rviz" pkg="rviz" args="-d $(find robominer_simulation)/rviz/config.rviz" />
+    
+	<node pkg="teleop_twist_keyboard" name="teleop_twist_keyboard" type="teleop_twist_keyboard.py" args="_speed:=0.02 _turn:=0.1"/>
+
+</launch>
+

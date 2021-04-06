@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="utf-8"?>
+  <robot xmlns:xacro="http://www.ros.org/wiki/xacro"
+    name="robominer">
+
+  <xacro:property name="grid_step_x" value="0.039"/>
+  <xacro:property name="grid_step_y" value="0.063"/>
+  <xacro:property name="flex_base_thickness" value="0.0"/>
+  <xacro:property name="whisker_length" value="0.150"/>
+  <xacro:property name="whisker_radius" value="0.002"/>
+  <xacro:property name="whisker_body_mass" value="0.0"/>
+  <xacro:property name="whisker_body_mass" value="0.015"/>
+  <xacro:property name="base_link_mass" value="0.0"/>
+  <xacro:property name="whisker_base_plate_mass" value="0.0"/>
+  <xacro:property name="whisker_prismatic_effort_limit" value="0.5"/>
+  <xacro:property name="whisker_revolute_effort_limit" value="10"/>
+  <xacro:property name="whisker_revolute_vel_limit" value="${pi/2}"/>
+
+  <link name="base_footprint">
+  </link>
+  <joint name="base_footprint_joint"
+    type="fixed">
+    <origin xyz="0 0 ${flex_base_thickness + whisker_length + whisker_radius /2}" rpy="0 0 0" />
+    <parent link="base_footprint" />
+    <child link="base_link" />
+  </joint>
+
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 ${-whisker_length + whisker_radius}" rpy="0 0 0" />
+      <mass
+        value="${base_link_mass}" />
+      <inertia
+        ixx="1"
+        ixy="0"
+        ixz="0"
+        iyy="1"
+        iyz="0"
+        izz="1" />
+    </inertial>
+    <collision>
+      <origin xyz="${6.5 * grid_step_x} ${6.5 * grid_step_y} ${-whisker_length + whisker_radius*10 + whisker_radius/2}" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${whisker_radius*10}" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="${6.5 * grid_step_x} -${6.5 * grid_step_y} ${-whisker_length + whisker_radius*10 + whisker_radius/2}" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${whisker_radius*10}" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-${6.5 * grid_step_x} ${6.5 * grid_step_y} ${-whisker_length + whisker_radius*10 + whisker_radius/2}" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${whisker_radius*10}" />
+      </geometry>
+    </collision>
+    <collision>
+      <origin xyz="-${6.5 * grid_step_x} -${6.5 * grid_step_y} ${-whisker_length + whisker_radius*10 + whisker_radius/2}" rpy="0 0 0" />
+      <geometry>
+        <sphere radius="${whisker_radius*10}" />
+      </geometry>
+    </collision>
+  </link>
+
+
+  <gazebo reference="base_link">
+    <gravity>0</gravity>
+    <mu1>0</mu1>
+    <mu2>0</mu2>
+  </gazebo>
+
+  <gazebo>
+    <plugin name="gazebo_ros_control" filename="libgazebo_ros_control.so">
+        <robotNamespace>/robominer</robotNamespace>
+    </plugin>
+
+    <plugin name="object_controller" filename="libgazebo_ros_planar_move.so">
+      <commandTopic>cmd_vel</commandTopic>
+      <odometryFrame>odom</odometryFrame>
+      <odometryRate>20.0</odometryRate>
+      <odometryTopic>odom</odometryTopic>
+      <publishOdometryTf>true</publishOdometryTf>
+      <robotBaseFrame>base_link</robotBaseFrame>
+    </plugin>
+  </gazebo>
+
+  <!-- creates a grid line of whiskers. 11 to top left, 1n top right and nn bottom right, if made in grid-->
+  <xacro:macro name="whisker_line" params="plate_no grid_size_x grid_size_y line_no whisker_no">
+    <xacro:if value="${whisker_no > 0}">
+      <joint name="whisker_sensor_joint_${plate_no}_${line_no}${whisker_no}"
+        type="fixed">
+        <xacro:if value="${line_no % 2}">
+          <origin
+            xyz="${-line_no * grid_step_x + (grid_size_x + 1) / 2 * grid_step_x} ${-whisker_no * grid_step_y + (grid_size_y + 1) / 2 * grid_step_y} 0"
+            rpy="0 0 0" />
+        </xacro:if>
+        <xacro:if value="${line_no % 2 == 0}">
+          <origin
+            xyz="${-line_no * grid_step_x + (grid_size_x + 1) / 2 * grid_step_x} ${-whisker_no * grid_step_y + (grid_size_y) / 2 * grid_step_y} 0"
+            rpy="0 0 0" />
+        </xacro:if>
+        <parent
+          link="whisker_base_plate_${plate_no}" />
+        <child
+          link="whisker_base_link_${plate_no}_${line_no}${whisker_no}" />
+        <axis
+          xyz="0 0 0" />
+      </joint>
+      <xacro:whisker plate_no="${plate_no}" line_no="${line_no}" whisker_no="${whisker_no}" />
+      <xacro:whisker_line plate_no="${plate_no}" grid_size_x="${grid_size_x}" grid_size_y="${grid_size_y}" line_no="${line_no}" whisker_no="${whisker_no - 1}" />
+    </xacro:if>
+  </xacro:macro>
+
+  <xacro:macro name="whisker_matrix" params="plate_no grid_size_y grid_size_x line_no">
+    <xacro:if value="${line_no > 0}">
+      <xacro:whisker_line plate_no="${plate_no}" grid_size_x="${grid_size_x}" grid_size_y="${grid_size_y}" line_no="${line_no}" whisker_no="${grid_size_y}" />
+      <xacro:whisker_matrix plate_no="${plate_no}" grid_size_x="${grid_size_x}" grid_size_y="${grid_size_y}" line_no="${line_no - 1}" />
+    </xacro:if>
+  </xacro:macro>
+
+  <xacro:macro name="whisker_sensor_plate" params="plate_no grid_size_x grid_size_y">
+    <link name="whisker_base_plate_${plate_no}">
+      <inertial>
+        <mass
+          value="${whisker_base_plate_mass}" />
+        <inertia
+          ixx="${whisker_base_plate_mass * ((grid_size_x + 1) * grid_step_x * (grid_size_x + 1) * grid_step_x + 0.001 * 0.001)}"
+          ixy="0"
+          ixz="0"
+          iyy="${whisker_base_plate_mass * (grid_size_x + 1) * grid_step_y * (grid_size_x + 1) * grid_step_y * 2}"
+          iyz="0"
+          izz="${whisker_base_plate_mass * ((grid_size_x + 1) * grid_step_y * (grid_size_y + 1) * grid_step_y + 0.001 * 0.001)}" />
+      </inertial>
+      <visual>
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0" />
+        <geometry>
+          <box size="${(grid_size_x + 1) * grid_step_x} ${(grid_size_y + 1) * grid_step_y} 0.001" />
+        </geometry>
+        <material
+          name="">
+          <color
+            rgba="0.25098 0.25098 0.25098 0.1" />
+        </material>
+      </visual>
+    </link>
+    <gazebo reference="whisker_base_plate_${plate_no}">
+      <material>Gazebo/GreyTransparent</material>
+    </gazebo>
+
+    <xacro:whisker_matrix plate_no="${plate_no}" grid_size_y="${grid_size_y}" grid_size_x="${grid_size_x}" line_no="${grid_size_x}" />
+  </xacro:macro>
+
+
+
+  <xacro:macro name="whisker" params="plate_no line_no whisker_no">
+    
+    <link name="whisker_base_link_${plate_no}_${line_no}${whisker_no}">
+      <inertial>
+        <origin
+          xyz="-3.6145E-05 -0.0012701 -0.013479"
+          rpy="0 0 0" />
+        <mass
+          value="0.00094384" />
+        <inertia
+          ixx="4.3963E-08"
+          ixy="-2.846E-25"
+          ixz="-1.1899E-10"
+          iyy="6.7172E-08"
+          iyz="-3.6116E-25"
+          izz="2.3968E-08" />
+      </inertial>
+    </link>
+
+    <joint name="flex_base_joint_${plate_no}_${line_no}${whisker_no}"
+      type="fixed">
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <parent
+        link="whisker_base_link_${plate_no}_${line_no}${whisker_no}" />
+      <child
+        link="flex_base_link_${plate_no}_${line_no}${whisker_no}" />
+    </joint>
+
+    <link name="flex_base_link_${plate_no}_${line_no}${whisker_no}">
+      <inertial>
+        <origin
+          xyz="9.998E-19 0.007375 7.8236E-18"
+          rpy="-1.5708 0 1.6513" />
+        <mass
+          value="0.0051409" />
+        <inertia
+          ixx="2.9897E-07"
+          ixy="-1.8488E-24"
+          ixz="-3.3087E-24"
+          iyy="3.6623E-07"
+          iyz="6.1295E-23"
+          izz="2.9897E-07" />
+      </inertial>
+    </link>
+
+    <joint name="magnet_joint_${plate_no}_${line_no}${whisker_no}_x"
+      type="revolute">
+      <origin
+        xyz="0 ${flex_base_thickness} 0"
+        rpy="-${pi/2} 0 ${pi/2}" />
+      <parent
+        link="flex_base_link_${plate_no}_${line_no}${whisker_no}" />
+      <child
+        link="dummy_magnet_link_${plate_no}_${line_no}${whisker_no}" />
+      <axis
+        xyz="1 0 0" />
+      <limit
+        lower="${-pi / 2}"
+        upper="${pi/2}"
+        effort="${whisker_revolute_effort_limit}"
+        velocity="${whisker_revolute_vel_limit}" />
+      <dynamics
+        damping="0.1"
+        friction="0.001" />
+    </joint>
+    <gazebo reference="magnet_joint_${plate_no}_${line_no}${whisker_no}_x">
+      <implicitSpringDamper>true</implicitSpringDamper>
+      <springStiffness>5.7</springStiffness>
+      <springReference>0.0</springReference>
+    </gazebo>
+
+    <transmission name="magnet_joint_${plate_no}_${line_no}${whisker_no}_x_transmission">
+      <type>transmission_interface/SimpleTransmission</type>
+      <joint name="magnet_joint_${plate_no}_${line_no}${whisker_no}_x">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      </joint>
+      <actuator name="magnet_joint_${plate_no}_${line_no}${whisker_no}_x_motor">
+        <mechanicalReduction>1</mechanicalReduction>
+      </actuator>
+    </transmission>
+
+    <link name="dummy_magnet_link_${plate_no}_${line_no}${whisker_no}">
+      <inertial>
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0" />
+        <mass
+          value="${0.00058596 / 2}" />
+        <inertia
+          ixx="${1.4282E-08 / 2}"
+          ixy="${1.3702E-25 / 2}"
+          ixz="${-2.223E-24 / 2}"
+          iyy="${5.7416E-09 / 2}"
+          iyz="${2.7339E-24 / 2}"
+          izz="${1.4282E-08 / 2}" />
+      </inertial>
+    </link>
+
+    <joint name="magnet_joint_${plate_no}_${line_no}${whisker_no}_y"
+      type="revolute">
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <parent
+        link="dummy_magnet_link_${plate_no}_${line_no}${whisker_no}" />
+      <child
+        link="magnet_link_${plate_no}_${line_no}${whisker_no}" />
+      <axis
+        xyz="0 0 1" />
+      <limit
+        lower="${-pi/2}"
+        upper="${pi/2}"
+        effort="${whisker_revolute_effort_limit}"
+        velocity="${whisker_revolute_vel_limit}" />
+      <dynamics
+        damping="0.1"
+        friction="0.001" />
+    </joint>
+    <gazebo reference="magnet_joint_${plate_no}_${line_no}${whisker_no}_y">
+      <implicitSpringDamper>true</implicitSpringDamper>
+      <springStiffness>5.7</springStiffness>
+      <springReference>0.0</springReference>
+    </gazebo>
+
+    <transmission name="magnet_joint_${plate_no}_${line_no}${whisker_no}_y_transmission">
+      <type>transmission_interface/SimpleTransmission</type>
+      <joint name="magnet_joint_${plate_no}_${line_no}${whisker_no}_y">
+        <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+      </joint>
+      <actuator name="magnet_joint_${plate_no}_${line_no}${whisker_no}_y_motor">
+        <mechanicalReduction>1</mechanicalReduction>
+      </actuator>
+    </transmission>
+
+  <link name="magnet_link_${plate_no}_${line_no}${whisker_no}">
+      <inertial>
+        <origin
+          xyz="-1.6025E-18 0.01295 -9.0999E-19"
+          rpy="0 0 0" />
+        <mass
+          value="${0.00058596 / 2}" />
+        <inertia
+          ixx="${1.4282E-08 / 2}"
+          ixy="${1.3702E-25 / 2}"
+          ixz="${-2.223E-24 / 2}"
+          iyy="${5.7416E-09 / 2}"
+          iyz="${2.7339E-24 / 2}"
+          izz="${1.4282E-08 / 2}" />
+      </inertial>
+    </link>
+
+    <joint name="whisker_body_joint_${plate_no}_${line_no}${whisker_no}"
+      type="fixed">
+      <origin
+        xyz="0 ${whisker_length/2} 0"
+        rpy="${pi/2} 0 0" />
+      <parent
+        link="magnet_link_${plate_no}_${line_no}${whisker_no}" />
+      <child
+        link="whisker_body_link_${plate_no}_${line_no}${whisker_no}" />
+    </joint>
+
+    <link name="whisker_body_link_${plate_no}_${line_no}${whisker_no}">
+      <inertial>
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0" />
+        <mass
+          value="${whisker_body_mass}" />
+        <inertia
+          ixx="${1/12 * whisker_body_mass * (3* whisker_radius ** 2 + whisker_length **2 )}" ixy="0" ixz="0"
+          iyy="${1/12 * whisker_body_mass * (3* whisker_radius ** 2 + whisker_length **2 )}" iyz="0"
+          izz="${1/2 * whisker_body_mass * whisker_radius ** 2}" />
+      </inertial>
+      <visual>
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0" />
+        <geometry>
+          <cylinder radius="${whisker_radius}" length="${whisker_length}" />
+        </geometry>
+        <material
+          name="">
+          <color
+            rgba="0.49804 0.49804 0.49804 1" />
+        </material>
+      </visual>
+      <visual>
+        <origin
+          xyz="0 0 ${-whisker_length/2}"
+          rpy="0 0 0" />
+        <geometry>
+          <sphere radius="${whisker_radius}" />
+        </geometry>
+        <material
+          name="">
+          <color
+            rgba="0.49804 0.49804 0.49804 1" />
+        </material>
+      </visual>
+      <collision>
+        <origin
+          xyz="0 0 0"
+          rpy="0 0 0" />
+        <geometry>
+          <cylinder radius="${whisker_radius}" length="${whisker_length}" />
+        </geometry>
+      </collision>
+      <collision>
+        <origin
+          xyz="0 0 ${-whisker_length/2}"
+          rpy="0 0 0" />
+        <geometry>
+          <sphere radius="${whisker_radius}" />
+        </geometry>
+      </collision>
+    </link>
+
+    <gazebo reference="whisker_body_link_${plate_no}_${line_no}${whisker_no}">
+      <mu1>0.2</mu1>
+      <mu2>0.2</mu2>
+      <self_collide>1</self_collide>
+    </gazebo>
+
+  </xacro:macro>
+
+  <joint name="whisker_plate_joint_1"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="whisker_base_plate_1" />
+  </joint>
+
+  <xacro:whisker_sensor_plate plate_no="1" grid_size_x="3" grid_size_y="3" />
+</robot>
